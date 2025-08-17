@@ -1,5 +1,4 @@
-// api/visa.ts — “max compatibility” version for RapidAPI visa-requirement
-// Works on Vercel (Node 18+). No extra deps.
+// api/visa.ts — GET-only attempt for RapidAPI visa-requirement
 
 export default async function handler(req: any, res: any) {
   const p = String(req.query.passport || "").toUpperCase();
@@ -13,15 +12,7 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    // Send BOTH variants in the body
-    const body = new URLSearchParams({
-      passport: p,           // variant A
-      nationality: p,        // variant B
-      destination: d,        // variant A
-      country: d,            // variant B
-    }).toString();
-
-    // Also put BOTH variants in the querystring (some backends read only qs)
+    // Send only GET query parameters (no body at all)
     const qs = new URLSearchParams({
       passport: p,
       nationality: p,
@@ -32,14 +23,12 @@ export default async function handler(req: any, res: any) {
     const url = `https://visa-requirement.p.rapidapi.com/map?${qs}`;
 
     const r = await fetch(url, {
-      method: "POST",
+      method: "GET",
       headers: {
         "Accept": "application/json",
-        "Content-Type": "application/x-www-form-urlencoded",
         "x-rapidapi-host": "visa-requirement.p.rapidapi.com",
         "x-rapidapi-key": process.env.VISA_API_KEY as string,
       },
-      body,
       cache: "no-store",
     });
 
@@ -51,7 +40,7 @@ export default async function handler(req: any, res: any) {
       passport: p,
       destination: d,
       fetchedAt: new Date().toISOString(),
-      _raw: json,   // keep for debugging; remove later if you want
+      _raw: json,
     });
   } catch (err: any) {
     return res.status(500).json({ error: true, message: err?.message || "Unknown error" });
