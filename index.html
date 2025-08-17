@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Travel Buddy – Visa Checker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#f8fafc; margin:0; }
+    .wrap { max-width: 720px; margin: 40px auto; background:#fff; border:1px solid #e5e7eb; border-radius:16px; padding:20px; }
+    h1 { margin:0 0 8px; font-size:22px; }
+    p.help { color:#64748b; margin:0 0 16px; }
+    .row { display:flex; gap:8px; align-items:center; margin:12px 0; }
+    input { flex:1; border:1px solid #e5e7eb; border-radius:12px; padding:10px; font-size:14px; text-transform:uppercase; }
+    button { background:#2563eb; color:#fff; border:none; padding:10px 14px; border-radius:10px; cursor:pointer; }
+    button:disabled { background:#94a3b8; cursor:not-allowed; }
+    pre { background:#f1f5f9; padding:12px; border-radius:12px; overflow:auto; }
+    .badge { display:inline-block; border-radius:999px; padding:4px 8px; color:#fff; font-weight:600; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Travel Buddy — Visa Checker</h1>
+    <p class="help">Enter ISO3 codes (e.g., FRA → JPN). This page calls your Vercel API.</p>
+
+    <div class="row">
+      <input id="passport" placeholder="Passport (ISO3 e.g. FRA)" maxlength="3" />
+      <input id="destination" placeholder="Destination (ISO3 e.g. JPN)" maxlength="3" />
+      <button id="checkBtn" disabled>Check</button>
+    </div>
+
+    <div id="result"></div>
+  </div>
+
+  <script>
+    const API_BASE = "https://travel-buddy-egkw.vercel.app";
+    const $passport = document.getElementById('passport');
+    const $destination = document.getElementById('destination');
+    const $btn = document.getElementById('checkBtn');
+    const $result = document.getElementById('result');
+
+    function updateBtn() {
+      $btn.disabled = !($passport.value.trim().length === 3 && $destination.value.trim().length === 3);
+    }
+
+    $passport.addEventListener('input', () => { $passport.value = $passport.value.toUpperCase(); updateBtn(); });
+    $destination.addEventListener('input', () => { $destination.value = $destination.value.toUpperCase(); updateBtn(); });
+
+    function badgeColor(req) {
+      switch (req) {
+        case 'visa_free': return '#16a34a';
+        case 'visa_on_arrival':
+        case 'evisa':
+        case 'eta': return '#d97706';
+        case 'visa_required': return '#dc2626';
+        default: return '#6b7280';
+      }
+    }
+
+    function label(req) {
+      return ({
+        visa_free: 'Visa-free',
+        evisa: 'eVisa',
+        eta: 'eTA',
+        visa_on_arrival: 'Visa on arrival',
+        visa_required: 'Visa required',
+        unknown: 'Unknown',
+      })[req] || 'Unknown';
+    }
+
+    $btn.addEventListener('click', async () => {
+      $btn.disabled = true;
+      $btn.textContent = 'Checking…';
+      $result.innerHTML = '';
+
+      try {
+        const res = await fetch(`${API_BASE}/api/visa`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            passport: $passport.value.trim().toUpperCase(),
+            destination: $destination.value.trim().toUpperCase()
+          })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data?.message || 'API Error');
+        }
+
+        const color = badgeColor(data.requirement);
+        const stay = data.allowedStay ? ` • Stay: ${data.allowedStay}` : '';
+
+        const notes = (data.notes || '')
+          .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+          .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+          .replace(/<[^>]*>/g, '');
+
+        $result.innerHTML = `
+          <div style="margin-top:12px;padding:12px;border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc">
+            <div style="margin-bottom:6px;font-weight:700">${data.passport} → ${data.destination}</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+              <span class="badge" style="background:${color}">${label(data.requirement)}</span>
+              <span style="color:#334155">${stay}</span>
+            </div>
+            ${notes ? `<div style="font-size:12px;color:#334155">${notes}</div>` : ''}
+            ${data.fetchedAt ? `<div style="margin-top:8px;font-size:10px;color:#6b7280">${new Date(data.fetchedAt).toLocaleString()}</div>` : ''}
+          </div>
+        `;
+      } catch (e) {
+        $result.innerHTML = `<pre>${String(e.message || e)}</pre>`;
+      } finally {
+        $btn.textContent = 'Check';
+        updateBtn();
+      }
+    });
+
+    updateBtn();
+  </script>
+</body>
+</html>
